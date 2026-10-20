@@ -3,19 +3,23 @@
 import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 
 import { MealEditor } from "@/components/meal-editor";
+import { RatingIcon } from "@/components/rating-icon";
 import {
   MEAL_TYPES,
+  RATINGS,
   STORAGE_KEY,
   buildCalendar,
   clearMonth,
   formatDayHeading,
   formatMonth,
+  parseMealPlan,
   removeMeal,
   setMeal,
   toDateKey,
   type CalendarCell,
   type DayPlan,
   type MealPlan,
+  type MealRating,
   type MealType,
 } from "@/lib/meal-plan";
 
@@ -57,9 +61,7 @@ function readStoredPlan(): MealPlan {
     if (!stored) return {};
 
     const parsed: unknown = JSON.parse(stored);
-    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-      return parsed as MealPlan;
-    }
+    return parseMealPlan(parsed);
   } catch {
     // Ignore corrupted or unavailable storage.
   }
@@ -115,13 +117,22 @@ export function MealPlanner() {
       lunch: 0,
       dinner: 0,
     };
+    const ratings: Record<MealRating, number> = {
+      loved: 0,
+      liked: 0,
+      tried: 0,
+    };
 
     for (const cell of monthCells) {
       const day = plan[cell.key];
       if (!day) continue;
 
       for (const meal of MEAL_TYPES) {
-        if (day[meal.id]) counts[meal.id] += 1;
+        const entry = day[meal.id];
+        if (!entry) continue;
+
+        counts[meal.id] += 1;
+        if (entry.rating) ratings[entry.rating] += 1;
       }
     }
 
@@ -131,6 +142,7 @@ export function MealPlanner() {
 
     return {
       counts,
+      ratings,
       totalDays,
       filled,
       total,
@@ -167,10 +179,10 @@ export function MealPlanner() {
     setPlan((current) => clearMonth(current, activeYear, activeMonth));
   }
 
-  function handleSave(value: string) {
+  function handleSave(value: string, rating?: MealRating) {
     if (!editing) return;
     setPlan((current) =>
-      setMeal(current, editing.dateKey, editing.type, value),
+      setMeal(current, editing.dateKey, editing.type, value, rating),
     );
     setEditing(null);
   }
@@ -343,6 +355,36 @@ export function MealPlanner() {
             </button>
           </section>
 
+          <section className="rounded-3xl border border-stone-200 bg-white/85 p-5 shadow-sm">
+            <h2 className="text-sm font-semibold text-stone-900">
+              Your ratings
+            </h2>
+            <p className="mt-1 text-xs text-stone-500">
+              Keep track of what you&apos;d make again.
+            </p>
+            <div className="mt-4 space-y-2">
+              {RATINGS.map((option) => (
+                <div
+                  key={option.id}
+                  className="flex items-center justify-between rounded-xl bg-stone-50 px-3 py-2"
+                >
+                  <span
+                    className={`flex items-center gap-2 text-xs font-semibold ${option.text}`}
+                  >
+                    <RatingIcon
+                      rating={option.id}
+                      className="h-3.5 w-3.5"
+                    />
+                    {option.label}
+                  </span>
+                  <span className="text-sm font-semibold tabular-nums text-stone-800">
+                    {stats.ratings[option.id]}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </section>
+
           <section className="rounded-3xl border border-orange-200/80 bg-gradient-to-br from-orange-50 via-amber-50 to-stone-50 p-5">
             <h2 className="text-sm font-semibold text-orange-950">
               A little tip
@@ -404,7 +446,11 @@ function DayCell({ cell, dayPlan, isToday, onEdit }: DayCellProps) {
 
       <div className="mt-1 space-y-0.5">
         {MEAL_TYPES.map((meal) => {
-          const value = dayPlan?.[meal.id];
+          const entry = dayPlan?.[meal.id];
+          const value = entry?.name;
+          const rating = RATINGS.find(
+            (option) => option.id === entry?.rating,
+          );
 
           return (
             <button
@@ -412,8 +458,10 @@ function DayCell({ cell, dayPlan, isToday, onEdit }: DayCellProps) {
               type="button"
               onClick={() => onEdit(meal.id)}
               title={
-                value
-                  ? `${meal.label}: ${value}`
+                entry
+                  ? `${meal.label}: ${entry.name}${
+                      rating ? ` (${rating.label})` : ""
+                    }`
                   : `Add ${meal.label.toLowerCase()}`
               }
               aria-label={`${
@@ -427,7 +475,7 @@ function DayCell({ cell, dayPlan, isToday, onEdit }: DayCellProps) {
                 {meal.short}
               </span>
               <span
-                className={`truncate text-[11px] leading-4 ${
+                className={`min-w-0 flex-1 truncate text-[11px] leading-4 ${
                   value
                     ? "font-medium text-stone-700"
                     : "text-stone-400 group-hover:text-stone-500"
@@ -435,6 +483,12 @@ function DayCell({ cell, dayPlan, isToday, onEdit }: DayCellProps) {
               >
                 {value ?? "Add"}
               </span>
+              {rating ? (
+                <RatingIcon
+                  rating={rating.id}
+                  className={`h-3 w-3 shrink-0 ${rating.text}`}
+                />
+              ) : null}
             </button>
           );
         })}
@@ -475,7 +529,11 @@ function MobileDay({ cell, dayPlan, isToday, onEdit }: MobileDayProps) {
 
       <div className="mt-2 grid gap-1.5">
         {MEAL_TYPES.map((meal) => {
-          const value = dayPlan?.[meal.id];
+          const entry = dayPlan?.[meal.id];
+          const value = entry?.name;
+          const rating = RATINGS.find(
+            (option) => option.id === entry?.rating,
+          );
 
           return (
             <button
@@ -501,6 +559,17 @@ function MobileDay({ cell, dayPlan, isToday, onEdit }: MobileDayProps) {
               >
                 {value ?? "Add a meal"}
               </span>
+              {rating ? (
+                <span
+                  className={`inline-flex shrink-0 items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${rating.chip}`}
+                >
+                  <RatingIcon
+                    rating={rating.id}
+                    className="h-2.5 w-2.5"
+                  />
+                  {rating.shortLabel}
+                </span>
+              ) : null}
               <svg
                 aria-hidden="true"
                 viewBox="0 0 16 16"

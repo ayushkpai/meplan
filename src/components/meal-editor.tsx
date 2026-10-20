@@ -5,9 +5,13 @@ import { useEffect, useRef, useState } from "react";
 import {
   MEAL_IDEAS,
   MEAL_TYPES,
+  RATINGS,
   formatLongDayHeading,
+  type MealEntry,
+  type MealRating,
   type MealType,
 } from "@/lib/meal-plan";
+import { RatingIcon } from "@/components/rating-icon";
 
 type EditingMeal = {
   dateKey: string;
@@ -16,9 +20,9 @@ type EditingMeal = {
 
 type MealEditorProps = {
   editing: EditingMeal;
-  existing?: string;
+  existing?: MealEntry;
   onClose: () => void;
-  onSave: (value: string) => void;
+  onSave: (value: string, rating?: MealRating) => void;
   onRemove: () => void;
 };
 
@@ -29,7 +33,10 @@ export function MealEditor({
   onSave,
   onRemove,
 }: MealEditorProps) {
-  const [draft, setDraft] = useState(existing ?? "");
+  const [draft, setDraft] = useState(existing?.name ?? "");
+  const [rating, setRating] = useState<MealRating | undefined>(
+    existing?.rating,
+  );
   const inputRef = useRef<HTMLInputElement>(null);
   const meta = MEAL_TYPES.find((meal) => meal.id === editing.type)!;
   const ideas = MEAL_IDEAS[editing.type];
@@ -62,7 +69,7 @@ export function MealEditor({
         role="dialog"
         aria-modal="true"
         aria-labelledby="meal-editor-title"
-        className="w-full max-w-lg rounded-t-3xl border border-stone-200 bg-[#fffdf9] p-5 shadow-2xl sm:rounded-3xl sm:p-6"
+        className="w-full max-h-[90dvh] max-w-lg overflow-y-auto rounded-t-3xl border border-stone-200 bg-[#fffdf9] p-5 shadow-2xl sm:rounded-3xl sm:p-6"
       >
         <div className="flex items-start justify-between gap-4">
           <div>
@@ -106,7 +113,7 @@ export function MealEditor({
           onSubmit={(event) => {
             event.preventDefault();
             if (!draft.trim()) return;
-            onSave(draft);
+            onSave(draft, rating);
           }}
         >
           <label
@@ -125,6 +132,39 @@ export function MealEditor({
             autoComplete="off"
             className="mt-2 w-full rounded-2xl border border-stone-300 bg-white px-4 py-3 text-base text-stone-900 shadow-sm outline-none transition placeholder:text-stone-400 focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
           />
+
+          <div className="mt-4">
+            <div className="flex items-baseline justify-between">
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-stone-500">
+                How was it?
+              </p>
+              <span className="text-[11px] text-stone-400">Optional</span>
+            </div>
+            <div className="mt-2 grid grid-cols-3 gap-2">
+              {RATINGS.map((option) => {
+                const selected = rating === option.id;
+
+                return (
+                  <button
+                    key={option.id}
+                    type="button"
+                    aria-pressed={selected}
+                    onClick={() =>
+                      setRating(selected ? undefined : option.id)
+                    }
+                    className={`flex items-center justify-center gap-1.5 rounded-xl border px-2 py-2.5 text-xs font-semibold transition ${
+                      selected
+                        ? option.selected
+                        : "border-stone-200 bg-white text-stone-500 hover:border-stone-300 hover:text-stone-700"
+                    }`}
+                  >
+                    <RatingIcon rating={option.id} className="h-4 w-4" />
+                    {option.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
 
           <p className="mt-4 text-xs font-semibold uppercase tracking-[0.14em] text-stone-500">
             Need an idea?
