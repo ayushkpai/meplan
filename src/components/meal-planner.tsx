@@ -3,7 +3,8 @@
 import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 
 import { MealEditor } from "@/components/meal-editor";
-import { RatingIcon } from "@/components/rating-icon";
+import { RatingIcon, ThumbsUpIcon } from "@/components/rating-icon";
+import { RatingMenu } from "@/components/rating-menu";
 import {
   MEAL_TYPES,
   RATINGS,
@@ -15,6 +16,7 @@ import {
   parseMealPlan,
   removeMeal,
   setMeal,
+  setMealRating,
   toDateKey,
   type CalendarCell,
   type DayPlan,
@@ -33,6 +35,12 @@ type EditingMeal = {
 type MonthCursor = {
   year: number;
   month: number;
+};
+
+type RatingAnchor = {
+  dateKey: string;
+  type: MealType;
+  rect: DOMRect;
 };
 
 function subscribeToClient() {
@@ -78,6 +86,7 @@ export function MealPlanner() {
   const [monthOffset, setMonthOffset] = useState(0);
   const [plan, setPlan] = useState<MealPlan>(readStoredPlan);
   const [editing, setEditing] = useState<EditingMeal | null>(null);
+  const [ratingAnchor, setRatingAnchor] = useState<RatingAnchor | null>(null);
 
   useEffect(() => {
     if (!today) return;
@@ -179,12 +188,44 @@ export function MealPlanner() {
     setPlan((current) => clearMonth(current, activeYear, activeMonth));
   }
 
-  function handleSave(value: string, rating?: MealRating) {
+  function handleSave(value: string) {
     if (!editing) return;
     setPlan((current) =>
-      setMeal(current, editing.dateKey, editing.type, value, rating),
+      setMeal(
+        current,
+        editing.dateKey,
+        editing.type,
+        value,
+        current[editing.dateKey]?.[editing.type]?.rating,
+      ),
     );
     setEditing(null);
+  }
+
+  function openRatingMenu(
+    dateKey: string,
+    type: MealType,
+    element: HTMLElement,
+  ) {
+    setRatingAnchor({
+      dateKey,
+      type,
+      rect: element.getBoundingClientRect(),
+    });
+  }
+
+  function handleRatingSelect(rating?: MealRating) {
+    if (!ratingAnchor) return;
+
+    setPlan((current) =>
+      setMealRating(
+        current,
+        ratingAnchor.dateKey,
+        ratingAnchor.type,
+        rating,
+      ),
+    );
+    setRatingAnchor(null);
   }
 
   function handleRemove() {
@@ -273,6 +314,9 @@ export function MealPlanner() {
                     onEdit={(type) =>
                       setEditing({ dateKey: cell.key, type })
                     }
+                    onRate={(type, element) =>
+                      openRatingMenu(cell.key, type, element)
+                    }
                   />
                 ))}
               </div>
@@ -287,6 +331,9 @@ export function MealPlanner() {
                 dayPlan={plan[cell.key]}
                 isToday={cell.key === todayKey}
                 onEdit={(type) => setEditing({ dateKey: cell.key, type })}
+                onRate={(type, element) =>
+                  openRatingMenu(cell.key, type, element)
+                }
               />
             ))}
           </div>
@@ -408,6 +455,18 @@ export function MealPlanner() {
           onRemove={handleRemove}
         />
       ) : null}
+
+      {ratingAnchor ? (
+        <RatingMenu
+          mealName={
+            plan[ratingAnchor.dateKey]?.[ratingAnchor.type]?.name ?? "Meal"
+          }
+          current={plan[ratingAnchor.dateKey]?.[ratingAnchor.type]?.rating}
+          rect={ratingAnchor.rect}
+          onSelect={handleRatingSelect}
+          onClose={() => setRatingAnchor(null)}
+        />
+      ) : null}
     </>
   );
 }
@@ -417,9 +476,16 @@ type DayCellProps = {
   dayPlan?: DayPlan;
   isToday: boolean;
   onEdit: (type: MealType) => void;
+  onRate: (type: MealType, element: HTMLElement) => void;
 };
 
-function DayCell({ cell, dayPlan, isToday, onEdit }: DayCellProps) {
+function DayCell({
+  cell,
+  dayPlan,
+  isToday,
+  onEdit,
+  onRate,
+}: DayCellProps) {
   if (!cell.inMonth) {
     return (
       <div className="min-h-[132px] bg-[#f4f0e8]/70 p-2">
@@ -453,43 +519,71 @@ function DayCell({ cell, dayPlan, isToday, onEdit }: DayCellProps) {
           );
 
           return (
-            <button
+            <div
               key={meal.id}
-              type="button"
-              onClick={() => onEdit(meal.id)}
-              title={
-                entry
-                  ? `${meal.label}: ${entry.name}${
-                      rating ? ` (${rating.label})` : ""
-                    }`
-                  : `Add ${meal.label.toLowerCase()}`
-              }
-              aria-label={`${
-                value ? `${meal.label}: ${value}` : `Add ${meal.label}`
-              } for ${formatDayHeading(cell.key)}`}
-              className="group flex w-full items-center gap-1.5 rounded-lg px-1 py-1 text-left transition hover:bg-orange-50"
+              className="group flex w-full items-center gap-0.5 rounded-lg px-1 py-1 transition hover:bg-orange-50"
             >
-              <span
-                className={`flex h-4 w-4 shrink-0 items-center justify-center rounded text-[9px] font-bold ${meal.chip}`}
+              <button
+                type="button"
+                onClick={() => onEdit(meal.id)}
+                title={
+                  entry
+                    ? `${meal.label}: ${entry.name}${
+                        rating ? ` (${rating.label})` : ""
+                      }`
+                    : `Add ${meal.label.toLowerCase()}`
+                }
+                aria-label={`${
+                  value ? `${meal.label}: ${value}` : `Add ${meal.label}`
+                } for ${formatDayHeading(cell.key)}`}
+                className="flex min-w-0 flex-1 items-center gap-1.5 text-left"
               >
-                {meal.short}
-              </span>
-              <span
-                className={`min-w-0 flex-1 truncate text-[11px] leading-4 ${
-                  value
-                    ? "font-medium text-stone-700"
-                    : "text-stone-400 group-hover:text-stone-500"
-                }`}
-              >
-                {value ?? "Add"}
-              </span>
-              {rating ? (
-                <RatingIcon
-                  rating={rating.id}
-                  className={`h-3 w-3 shrink-0 ${rating.text}`}
-                />
+                <span
+                  className={`flex h-4 w-4 shrink-0 items-center justify-center rounded text-[9px] font-bold ${meal.chip}`}
+                >
+                  {meal.short}
+                </span>
+                <span
+                  className={`min-w-0 flex-1 truncate text-[11px] leading-4 ${
+                    value
+                      ? "font-medium text-stone-700"
+                      : "text-stone-400 group-hover:text-stone-500"
+                  }`}
+                >
+                  {value ?? "Add"}
+                </span>
+              </button>
+
+              {entry ? (
+                <button
+                  type="button"
+                  onClick={(event) =>
+                    onRate(meal.id, event.currentTarget)
+                  }
+                  title={
+                    rating
+                      ? `Rated ${rating.label.toLowerCase()}`
+                      : "Rate this meal"
+                  }
+                  aria-label={
+                    rating
+                      ? `Change rating for ${entry.name}`
+                      : `Rate ${entry.name}`
+                  }
+                  aria-haspopup="menu"
+                  className={`shrink-0 rounded-md p-0.5 transition ${
+                    rating
+                      ? rating.text
+                      : "text-stone-300 hover:text-stone-600"
+                  }`}
+                >
+                  <ThumbsUpIcon
+                    className="h-3 w-3"
+                    filled={Boolean(entry.rating)}
+                  />
+                </button>
               ) : null}
-            </button>
+            </div>
           );
         })}
       </div>
@@ -502,9 +596,16 @@ type MobileDayProps = {
   dayPlan?: DayPlan;
   isToday: boolean;
   onEdit: (type: MealType) => void;
+  onRate: (type: MealType, element: HTMLElement) => void;
 };
 
-function MobileDay({ cell, dayPlan, isToday, onEdit }: MobileDayProps) {
+function MobileDay({
+  cell,
+  dayPlan,
+  isToday,
+  onEdit,
+  onRate,
+}: MobileDayProps) {
   return (
     <div className={`p-3.5 ${isToday ? "bg-orange-50/60" : ""}`}>
       <div className="flex items-center gap-2.5">
@@ -536,55 +637,78 @@ function MobileDay({ cell, dayPlan, isToday, onEdit }: MobileDayProps) {
           );
 
           return (
-            <button
+            <div
               key={meal.id}
-              type="button"
-              onClick={() => onEdit(meal.id)}
-              className="flex w-full items-center gap-2.5 rounded-xl border border-stone-200/80 bg-white px-3 py-2 text-left transition hover:border-orange-200 hover:bg-orange-50/60"
+              className="flex w-full items-center rounded-xl border border-stone-200/80 bg-white transition hover:border-orange-200 hover:bg-orange-50/60"
             >
-              <span
-                className={`flex h-5 w-5 shrink-0 items-center justify-center rounded text-[10px] font-bold ${meal.chip}`}
+              <button
+                type="button"
+                onClick={() => onEdit(meal.id)}
+                className="flex min-w-0 flex-1 items-center gap-2.5 px-3 py-2 text-left"
               >
-                {meal.short}
-              </span>
-              <span className="w-16 shrink-0 text-xs font-medium text-stone-500">
-                {meal.label}
-              </span>
-              <span
-                className={`flex-1 truncate text-sm ${
-                  value
-                    ? "font-medium text-stone-800"
-                    : "text-stone-400"
-                }`}
-              >
-                {value ?? "Add a meal"}
-              </span>
-              {rating ? (
                 <span
-                  className={`inline-flex shrink-0 items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${rating.chip}`}
+                  className={`flex h-5 w-5 shrink-0 items-center justify-center rounded text-[10px] font-bold ${meal.chip}`}
                 >
-                  <RatingIcon
-                    rating={rating.id}
-                    className="h-2.5 w-2.5"
-                  />
-                  {rating.shortLabel}
+                  {meal.short}
                 </span>
+                <span className="w-16 shrink-0 text-xs font-medium text-stone-500">
+                  {meal.label}
+                </span>
+                <span
+                  className={`flex-1 truncate text-sm ${
+                    value
+                      ? "font-medium text-stone-800"
+                      : "text-stone-400"
+                  }`}
+                >
+                  {value ?? "Add a meal"}
+                </span>
+                <svg
+                  aria-hidden="true"
+                  viewBox="0 0 16 16"
+                  fill="none"
+                  className="h-3.5 w-3.5 shrink-0 text-stone-300"
+                >
+                  <path
+                    d="M6 3.5L10.5 8L6 12.5"
+                    stroke="currentColor"
+                    strokeWidth="1.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+              </button>
+
+              {entry ? (
+                <button
+                  type="button"
+                  onClick={(event) =>
+                    onRate(meal.id, event.currentTarget)
+                  }
+                  title={
+                    rating
+                      ? `Rated ${rating.label.toLowerCase()}`
+                      : "Rate this meal"
+                  }
+                  aria-label={
+                    rating
+                      ? `Change rating for ${entry.name}`
+                      : `Rate ${entry.name}`
+                  }
+                  aria-haspopup="menu"
+                  className={`mr-2 shrink-0 rounded-lg p-1.5 transition ${
+                    rating
+                      ? rating.text
+                      : "text-stone-300 hover:bg-stone-100 hover:text-stone-600"
+                  }`}
+                >
+                  <ThumbsUpIcon
+                    className="h-4 w-4"
+                    filled={Boolean(entry.rating)}
+                  />
+                </button>
               ) : null}
-              <svg
-                aria-hidden="true"
-                viewBox="0 0 16 16"
-                fill="none"
-                className="h-3.5 w-3.5 shrink-0 text-stone-300"
-              >
-                <path
-                  d="M6 3.5L10.5 8L6 12.5"
-                  stroke="currentColor"
-                  strokeWidth="1.5"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </svg>
-            </button>
+            </div>
           );
         })}
       </div>

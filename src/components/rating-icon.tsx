@@ -5,6 +5,33 @@ type RatingIconProps = {
   className?: string;
 };
 
+type ThumbsUpIconProps = {
+  className?: string;
+  filled?: boolean;
+};
+
+export function ThumbsUpIcon({
+  className = "h-3.5 w-3.5",
+  filled = false,
+}: ThumbsUpIconProps) {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 20 20"
+      fill={filled ? "currentColor" : "none"}
+      className={className}
+    >
+      <path
+        d="M7.5 9.2v6.3H4.8V9.2h2.7zm2 6.3V9.2l2.7-5.4c1.1 0 2 1 2 2.1v2.2h2.1c1 0 1.8.9 1.6 1.9l-.7 3.7c-.2.9-1 1.5-1.9 1.5h-5.8v.3z"
+        stroke="currentColor"
+        strokeWidth={filled ? 0 : 1.5}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
 export function RatingIcon({
   rating,
   className = "h-4 w-4",

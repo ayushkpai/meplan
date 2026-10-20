@@ -28,11 +28,9 @@ export type MealTypeMeta = {
 export type RatingMeta = {
   id: MealRating;
   label: string;
-  shortLabel: string;
   chip: string;
   text: string;
   dot: string;
-  selected: string;
 };
 
 export const MEAL_TYPES: MealTypeMeta[] = [
@@ -63,29 +61,23 @@ export const RATINGS: RatingMeta[] = [
   {
     id: "loved",
     label: "Loved it",
-    shortLabel: "Loved",
     chip: "bg-rose-50 text-rose-700",
     text: "text-rose-500",
     dot: "bg-rose-400",
-    selected: "border-rose-300 bg-rose-50 text-rose-800",
   },
   {
     id: "liked",
     label: "Liked it",
-    shortLabel: "Liked",
     chip: "bg-amber-50 text-amber-700",
     text: "text-amber-500",
     dot: "bg-amber-400",
-    selected: "border-amber-300 bg-amber-50 text-amber-800",
   },
   {
     id: "tried",
     label: "Tried it",
-    shortLabel: "Tried",
     chip: "bg-sky-50 text-sky-700",
     text: "text-sky-500",
     dot: "bg-sky-400",
-    selected: "border-sky-300 bg-sky-50 text-sky-800",
   },
 ];
 
@@ -257,6 +249,25 @@ export function removeMeal(plan: MealPlan, dateKey: string, type: MealType) {
   }
 
   return { ...plan, [dateKey]: day };
+}
+
+export function setMealRating(
+  plan: MealPlan,
+  dateKey: string,
+  type: MealType,
+  rating?: MealRating,
+) {
+  const entry = plan[dateKey]?.[type];
+  if (!entry) return plan;
+
+  const nextEntry: MealEntry = rating
+    ? { name: entry.name, rating }
+    : { name: entry.name };
+
+  return {
+    ...plan,
+    [dateKey]: { ...plan[dateKey], [type]: nextEntry },
+  };
 }
 
 export function setMeal(
