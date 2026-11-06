@@ -25,8 +25,3 @@ body {
   color: var(--foreground);
   font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
 }
-
-::selection {
-  background: #fed7aa;
-  color: #7c2d12;
-}
